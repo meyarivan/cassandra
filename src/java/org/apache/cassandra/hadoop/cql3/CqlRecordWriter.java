@@ -298,34 +298,36 @@ class CqlRecordWriter extends RecordWriter<Map<String, ByteBuffer>, List<ByteBuf
                 while (true)
                 {
                     // send the mutation to the last-used endpoint.  first time through, this will NPE harmlessly.
-
-                    // attempt to connect to a different endpoint
-                    try
+                    if (client == null)
                     {
-                        InetAddress address = iter.next();
-                        String host = address.getHostName();
-                        client = CqlConfigHelper.getOutputCluster(host, conf).connect();
-                    }
-                    catch (Exception e)
-                    {
-                        //If connection died due to Interrupt, just try connecting to the endpoint again.
-                        //There are too many ways for the Thread.interrupted() state to be cleared, so
-                        //we can't rely on that here. Until the java driver gives us a better way of knowing
-                        //that this exception came from an InterruptedException, this is the best solution.
-                        if (canRetryDriverConnection(e))
+                        // attempt to connect to a different endpoint
+                        try
                         {
-                            iter.previous();
+                            InetAddress address = iter.next();
+                            String host = address.getHostName();
+                            client = CqlConfigHelper.getOutputCluster(host, conf).connect();
                         }
-                        closeInternal();
+                        catch (Exception e)
+                        {
+                            //If connection died due to Interrupt, just try connecting to the endpoint again.
+                            //There are too many ways for the Thread.interrupted() state to be cleared, so
+                            //we can't rely on that here. Until the java driver gives us a better way of knowing
+                            //that this exception came from an InterruptedException, this is the best solution.
+                            if (canRetryDriverConnection(e))
+                            {
+                                iter.previous();
+                            }
+                            closeInternal();
 
-                        // Most exceptions mean something unexpected went wrong to that endpoint, so
-                        // we should try again to another.  Other exceptions (auth or invalid request) are fatal.
-                        if ((e instanceof AuthenticationException || e instanceof InvalidQueryException) || !iter.hasNext())
-                        {
-                            lastException = new IOException(e);
-                            break outer;
+                            // Most exceptions mean something unexpected went wrong to that endpoint, so
+                            // we should try again to another.  Other exceptions (auth or invalid request) are fatal.
+                            if ((e instanceof AuthenticationException || e instanceof InvalidQueryException) || !iter.hasNext())
+                            {
+                                lastException = new IOException(e);
+                                break outer;
+                            }
+                            continue;
                         }
-                        continue;
                     }
 
                     try
